@@ -49,7 +49,7 @@ class AIServices:
                 error_msg += f" | Status: {e.response.status_code} | Response: {e.response.text}"
             raise Exception(error_msg)
 
-    def _generate_response(self, prompt: str, content: str, max_length: int = 500) -> str:
+    def _generate_response(self, prompt: str, max_length: int = 500) -> str:
         """Generate response using IBM Granite model via API or fallback to rule-based processing"""
         try:
             # Try Hugging Face API first
@@ -67,21 +67,25 @@ class AIServices:
             
         except Exception as e:
             print(f"API error, using fallback: {e}")
-            return self._fallback_processing(prompt, content)
+            return self._fallback_processing(prompt)
             
-    def _fallback_processing(self, prompt: str, content: str) -> str:
+    def _fallback_processing(self, prompt: str) -> str:
         """Enhanced fallback processing that actually analyzes content"""
         prompt_text = prompt.lower()
         
-        if not content or not content.strip():
+        # Extract content from the prompt (it's usually after "Content:" or similar)
+        content_match = re.search(r'content[:\s]+(.*)', prompt, re.IGNORECASE | re.DOTALL)
+        content = content_match.group(1) if content_match else ""
+        
+        if not content.strip():
             return "I couldn't find any content to analyze. Please make sure the PDF was uploaded correctly."
         
         # Clean content for analysis
-        clean_content = content.strip()[:5000]  # Limit to first 5000 chars for processing
+        content = content.strip()[:5000]  # Limit to first 5000 chars for processing
         
         if "summarize" in prompt_text:
             # Fallback for summarization
-            return self.summarize_content(clean_content, "Brief", "Simple")
+            return self.summarize_content(content, "Brief", "Simple")
         elif "translate to" in prompt_text:
             # Fallback for translation
             return f"I encountered an issue trying to translate. Please try again."
@@ -90,10 +94,10 @@ class AIServices:
             question_start = prompt_text.find("'") + 1
             question_end = prompt_text.find("'", question_start)
             question = prompt_text[question_start:question_end]
-            return self._find_relevant_content(clean_content, question)
+            return self._find_relevant_content(content, question)
         else:
             # Default fallback: extract key topics
-            return self.extract_key_topics(clean_content)
+            return self.extract_key_topics(content)
 
     def _find_relevant_content(self, content: str, question: str) -> str:
         """
@@ -257,7 +261,7 @@ class AIServices:
         """
         
         try:
-            response = self._generate_response(prompt, content, max_length=800)
+            response = self._generate_response(prompt, max_length=800)
             
             # If using fallback, create a more detailed summary
             if "This appears to be a request for summarization" in response:
@@ -301,13 +305,13 @@ class AIServices:
     """
 
         try:
-            translated_text = self._generate_response(prompt, content, max_length=4096)
+            translated_text = self._generate_response(prompt, max_length=4096)
             # Relax the validation to be more forgiving for concise languages
             if not translated_text or len(translated_text) < 10:
-                return self._fallback_processing(f"translate to {target_language}", content)
+                return self._fallback_processing(f"translate to {target_language}: content: {content}")
             return translated_text
         except Exception as e:
-            return self._fallback_processing(f"translate to {target_language}", content)
+            return self._fallback_processing(f"translate to {target_language}: content: {content}")
 
     def extract_key_points(self, content: str) -> str:
         """
@@ -326,7 +330,7 @@ class AIServices:
         """
         
         try:
-            response = self._generate_response(prompt, content, max_length=600)
+            response = self._generate_response(prompt, max_length=600)
             
             # If using fallback, create basic key points
             if "This is a topic extraction request" in response:
@@ -389,7 +393,7 @@ class AIServices:
         """
         
         try:
-            response = self._generate_response(prompt, content, max_length=1200)
+            response = self._generate_response(prompt, max_length=1200)
             
             # If using fallback, create structured topics from content
             if "This is a topic extraction request" in response:
@@ -501,7 +505,7 @@ class AIServices:
         """
         
         try:
-            response = self._generate_response(prompt, content, max_length=1000)
+            response = self._generate_response(prompt, max_length=1000)
             
             # If we got a fallback response, try to find relevant content
             if "This is a question-answering request" in response:
@@ -559,7 +563,7 @@ class AIServices:
         """
         
         try:
-            response = self._generate_response(prompt, content, max_length=1500)
+            response = self._generate_response(prompt, max_length=1500)
             
             # If using fallback, generate basic questions
             if "This is a test generation request" in response:
