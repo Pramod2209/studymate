@@ -793,7 +793,7 @@ def main():
         elif st.session_state.current_page == "topics":
             handle_topic_extraction()
         elif st.session_state.current_page == "qa":
-            handle_qa_session()
+            handle_qa()
         elif st.session_state.current_page == "test":
             handle_test_generation()
 
@@ -1015,66 +1015,6 @@ def handle_topic_extraction():
             except Exception as e:
                 st.error(f"❌ Error extracting topics: {str(e)}")
 
-def handle_qa_session():
-    st.markdown("## ❓ Interactive Q&A Session")
-    st.markdown("Ask questions about your document and get intelligent answers")
-    
-    # Back button
-    if st.button("← Back to Actions", key="back_qa"):
-        st.session_state.current_page = "main"
-        st.rerun()
-    
-    if not st.session_state.pdf_content:
-        st.warning("⚠️ Please upload a PDF first!")
-        return
-    
-    # Quick question suggestions
-    st.markdown("### 💡 Quick Questions")
-    quick_questions = [
-        "What is the main topic of this document?",
-        "What are the key conclusions?",
-        "Can you explain the methodology used?",
-        "What are the important definitions mentioned?"
-    ]
-    
-    cols = st.columns(2)
-    for i, question in enumerate(quick_questions):
-        with cols[i % 2]:
-            if st.button(question, key=f"quick_q_{i}", use_container_width=True):
-                process_question(question)
-    
-    # Custom question input
-    st.markdown("### 🤔 Ask Your Own Question")
-    
-    with st.form("question_form"):
-        user_question = st.text_area(
-            "Your Question:",
-            placeholder="Ask anything about the PDF content...",
-            height=100,
-            key="user_question"
-        )
-        
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            submit_button = st.form_submit_button("🚀 Ask Question", use_container_width=True)
-    
-    if submit_button and user_question:
-        process_question(user_question)
-
-def process_question(question):
-    with st.chat_message("assistant"):
-        message_placeholder = st.empty()
-        with st.spinner("Analyzing document and generating answer..."):
-            full_text = st.session_state.get("pdf_content", "")
-            if full_text:
-                ai = AIServices()
-                response = ai.answer_question(full_text, question)
-                message_placeholder.markdown(response)
-            else:
-                response = "I can't answer questions without a PDF document. Please upload one first."
-                message_placeholder.markdown(response)
-        st.session_state.messages.append({"role": "assistant", "content": response})
-
 def handle_test_generation():
     st.markdown("## 📝 Practice Test Generator")
     st.markdown("Create custom test questions based on your document content")
@@ -1175,6 +1115,42 @@ def handle_test_generation():
                 
             except Exception as e:
                 st.error(f"❌ Error generating test: {str(e)}")
+
+def handle_qa():
+    st.markdown("## 💬 PDF Q&A")
+    st.markdown("Ask questions about your document, and the AI will provide detailed answers.")
+
+    if st.button("← Back to Actions", key="back_qa"):
+        st.session_state.current_page = "main"
+        st.rerun()
+
+    # Initialize chat history
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    # Display existing messages
+    for message in st.session_state.messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # Chat input
+    if prompt := st.chat_input("Ask a question about your PDF..."):
+        st.session_state.messages.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        with st.chat_message("assistant"):
+            message_placeholder = st.empty()
+            with st.spinner("Analyzing document and generating answer..."):
+                full_text = st.session_state.get("pdf_content", "")
+                if full_text:
+                    ai = AIServices()
+                    response = ai.answer_question(full_text, prompt)
+                    message_placeholder.markdown(response)
+                else:
+                    response = "I can't answer questions without a PDF document. Please upload one first."
+                    message_placeholder.markdown(response)
+            st.session_state.messages.append({"role": "assistant", "content": response})
 
 if __name__ == "__main__":
     main()
