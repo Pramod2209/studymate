@@ -11,7 +11,7 @@ class AIServices:
         # Using IBM Granite 3.1 2B model via Hugging Face Inference API
         self.model_name = "ibm-granite/granite-3.1-2b-instruct"
         self.api_url = f"https://api-inference.huggingface.co/models/{self.model_name}"
-        self.api_key = os.environ.get("HUGGINGFACE_API_KEY")
+        self.api_key = os.getenv("HUGGINGFACE_API_KEY")
         
         if not self.api_key:
             raise ValueError("Hugging Face API key not found. Please set HUGGINGFACE_API_KEY in your environment variables.")
@@ -111,7 +111,7 @@ class AIServices:
         question_keywords = set(re.findall(r'\b\w{4,}\b', question_lower))  # Only words with 4+ chars
         
         # Remove common words that don't add meaning
-        stopwords = {'what', 'when', 'where', 'why', 'how', 'the', 'and', 'your', 'this', 'that', 'with', 'from', 'they', 'have', 'which'}
+        stopwords = {'what', 'when', 'where', 'why', 'how', 'the', 'and', 'your', 'this', 'that', 'with', 'from', 'they', 'have', 'been', 'were', 'will', 'would', 'could', 'should'}
         question_keywords = {w for w in question_keywords if w not in stopwords}
         
         if not question_keywords:
@@ -298,33 +298,19 @@ class AIServices:
         if not content or not content.strip():
             return "Error: Cannot translate empty content."
 
-        language_map = {
-            "German": "de", "French": "fr", "Spanish": "es",
-            "Chinese": "zh", "Japanese": "ja", "Russian": "ru",
-            "Arabic": "ar", "Portuguese": "pt", "Hindi": "hi"
-        }
-        lang_code = language_map.get(target_language, "en")
+        prompt = f"""Translate the following academic text into {target_language}. Provide ONLY the translated text, without any additional comments, headers, or explanations. The translation should be accurate, fluent, and maintain the original tone and style of the academic text.
 
-        prompt = f"""Translate the following academic text into {target_language}. 
-        The translation must be accurate, professional, and maintain the original tone and key terminology. 
-        Do not add any introductory phrases like 'Here is the translation'.
-        
-        Content to Translate:
-        --- 
-        {content}
-        --- 
-        """
-        
+    **Text to Translate:**
+    {content}
+    """
+
         try:
-            translated_text = self._generate_response(prompt, max_length=2048)
-            
-            # Basic validation to ensure the translation is not empty or a generic refusal
-            if not translated_text or len(translated_text) < 0.5 * len(content):
+            translated_text = self._generate_response(prompt, max_length=4096)
+            # Relax the validation to be more forgiving for concise languages
+            if not translated_text or len(translated_text) < 10:
                 return self._fallback_processing(f"translate to {target_language}: content: {content}")
-            
             return translated_text
         except Exception as e:
-            print(f"Translation failed, using fallback: {e}")
             return self._fallback_processing(f"translate to {target_language}: content: {content}")
 
     def extract_key_points(self, content: str) -> str:
