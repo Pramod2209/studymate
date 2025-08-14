@@ -71,7 +71,7 @@ class AIServices:
             
     def _fallback_processing(self, prompt: str) -> str:
         """Enhanced fallback processing that actually analyzes content"""
-        prompt_lower = prompt.lower()
+        prompt_text = prompt.lower()
         
         # Extract content from the prompt (it's usually after "Content:" or similar)
         content_match = re.search(r'content[:\s]+(.*)', prompt, re.IGNORECASE | re.DOTALL)
@@ -83,21 +83,65 @@ class AIServices:
         # Clean content for analysis
         content = content.strip()[:5000]  # Limit to first 5000 chars for processing
         
-        if "summarize" in prompt_lower or "summary" in prompt_lower:
-            return self._create_content_summary(content)
-        elif "translate" in prompt_lower:
-            # Extract target language from prompt if possible
-            lang_match = re.search(r'translate to (\w+)', prompt_lower)
-            target_lang = lang_match.group(1) if lang_match else "the target language"
-            return f"I am currently unable to provide a full translation. Based on the content, the key points would be translated to {target_lang} while preserving the main ideas."
-        elif "topics" in prompt_lower or "extract" in prompt_lower:
-            return self._extract_content_topics(content)
-        elif "question" in prompt_lower or "answer" in prompt_lower:
-            return self._answer_from_content(content, prompt)
-        elif "test" in prompt_lower or "quiz" in prompt_lower:
-            return self._generate_content_questions(content)
+        if "summarize" in prompt_text:
+            # Fallback for summarization
+            return self.summarize_content(content, "Brief", "Simple")
+        elif "translate to" in prompt_text:
+            # Fallback for translation
+            return f"I encountered an issue trying to translate. Please try again."
+        elif "answer the question" in prompt_text:
+            # Fallback for Q&A: try to find relevant snippets
+            question_start = prompt_text.find("'") + 1
+            question_end = prompt_text.find("'", question_start)
+            question = prompt_text[question_start:question_end]
+            return self._find_relevant_content(content, question)
         else:
-            return self._create_content_summary(content)
+            # Default fallback: extract key topics
+            return self.extract_key_topics(content)
+
+    def _find_relevant_content(self, content: str, question: str) -> str:
+        """
+        Find relevant content for the question using improved text matching
+        """
+        # Split into paragraphs first for better context
+        paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
+        
+        # Clean and tokenize question
+        question_lower = question.lower()
+        question_keywords = set(re.findall(r'\b\w{4,}\b', question_lower))  # Only words with 4+ chars
+        
+        # Remove common words that don't add meaning
+        stopwords = {'what', 'when', 'where', 'why', 'how', 'the', 'and', 'your', 'this', 'that', 'with', 'from', 'they', 'have', 'which'}
+        question_keywords = {w for w in question_keywords if w not in stopwords}
+        
+        if not question_keywords:
+            return ""
+            
+        # Score each paragraph based on keyword matches
+        scored_paragraphs = []
+        for para in paragraphs:
+            para_lower = para.lower()
+            para_words = set(re.findall(r'\b\w+\b', para_lower))
+            
+            # Calculate overlap score
+            overlap = len(question_keywords.intersection(para_words))
+            if overlap > 0 and len(para) > 50:  # Only include meaningful paragraphs
+                # Add some weight if the paragraph contains question words
+                score = overlap + (0.5 if any(word in para_lower for word in ['because', 'therefore', 'thus', 'hence']) else 0)
+                scored_paragraphs.append((para, score))
+        
+        # Sort by score and take top 2-3 most relevant paragraphs
+        scored_paragraphs.sort(key=lambda x: x[1], reverse=True)
+        relevant_paras = [p[0] for p in scored_paragraphs[:3] if p[1] > 0]
+        
+        if not relevant_paras:
+            return ""
+            
+        # Format the response
+        if len(relevant_paras) == 1:
+            return f"Here's a relevant section that might help answer your question:\n\n{relevant_paras[0]}"
+        else:
+            return "Here are some relevant sections that might help answer your question:\n\n" + "\n\n".join(f"[{i+1}] {para}" for i, para in enumerate(relevant_paras))
     
     def _create_content_summary(self, content: str) -> str:
         """Create a meaningful summary from content"""
@@ -494,50 +538,6 @@ class AIServices:
         except Exception as e:
             print(f"Error in answer_question: {str(e)}")
             return self._find_relevant_content(content, question) or "I encountered an error while processing your question. Please try again."
-    
-    def _find_relevant_content(self, content: str, question: str) -> str:
-        """
-        Find relevant content for the question using improved text matching
-        """
-        # Split into paragraphs first for better context
-        paragraphs = [p.strip() for p in content.split('\n\n') if p.strip()]
-        
-        # Clean and tokenize question
-        question_lower = question.lower()
-        question_keywords = set(re.findall(r'\b\w{4,}\b', question_lower))  # Only words with 4+ chars
-        
-        # Remove common words that don't add meaning
-        stopwords = {'what', 'when', 'where', 'why', 'how', 'the', 'and', 'your', 'this', 'that', 'with', 'from', 'they', 'have', 'which'}
-        question_keywords = {w for w in question_keywords if w not in stopwords}
-        
-        if not question_keywords:
-            return ""
-            
-        # Score each paragraph based on keyword matches
-        scored_paragraphs = []
-        for para in paragraphs:
-            para_lower = para.lower()
-            para_words = set(re.findall(r'\b\w+\b', para_lower))
-            
-            # Calculate overlap score
-            overlap = len(question_keywords.intersection(para_words))
-            if overlap > 0 and len(para) > 50:  # Only include meaningful paragraphs
-                # Add some weight if the paragraph contains question words
-                score = overlap + (0.5 if any(word in para_lower for word in ['because', 'therefore', 'thus', 'hence']) else 0)
-                scored_paragraphs.append((para, score))
-        
-        # Sort by score and take top 2-3 most relevant paragraphs
-        scored_paragraphs.sort(key=lambda x: x[1], reverse=True)
-        relevant_paras = [p[0] for p in scored_paragraphs[:3] if p[1] > 0]
-        
-        if not relevant_paras:
-            return ""
-            
-        # Format the response
-        if len(relevant_paras) == 1:
-            return f"Here's a relevant section that might help answer your question:\n\n{relevant_paras[0]}"
-        else:
-            return "Here are some relevant sections that might help answer your question:\n\n" + "\n\n".join(f"[{i+1}] {para}" for i, para in enumerate(relevant_paras))
     
     def generate_test(self, content: str, question_count: int = 10, question_type: str = "Multiple Choice", difficulty: str = "Medium") -> List[Dict[str, Any]]:
         """

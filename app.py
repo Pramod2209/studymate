@@ -639,29 +639,37 @@ def handle_translation():
     cols = st.columns(4)
     for i, lang in enumerate(languages):
         with cols[i % 4]:
+            # Only trigger translation if the language changes
             if st.button(lang, key=f"lang_{lang}", use_container_width=True):
-                with st.spinner(f"Translating to {lang}, please wait..."):
-                    full_text = st.session_state.get("pdf_content", "")
-                    if full_text:
-                        ai = AIServices()
-                        translated_content = ai.translate(full_text, lang)
-                        st.session_state.translated_text = translated_content
-                        st.session_state.translated_lang = lang
-                    else:
-                        st.session_state.translated_text = "Error: PDF content not found."
-                st.rerun()
+                if st.session_state.get("translated_lang") != lang:
+                    with st.spinner(f"Translating to {lang}, please wait..."):
+                        full_text = st.session_state.get("pdf_content", "")
+                        if full_text:
+                            ai = AIServices()
+                            translated_content = ai.translate(full_text, lang)
+                            st.session_state.translated_text = translated_content
+                            st.session_state.translated_lang = lang
+                        else:
+                            st.session_state.translated_text = "Error: PDF content not found."
+                    st.rerun()
 
+    # Display translation result and download button
     if "translated_text" in st.session_state:
         st.text_area("Translated Content", st.session_state.translated_text, height=300)
-        if st.session_state.translated_text and "error" not in st.session_state.translated_text.lower() and len(st.session_state.translated_text) > 50:
-            st.download_button(
-                label="📥 Download Translation",
-                data=st.session_state.translated_text.encode('utf-8'),
-                file_name=f"translation_{st.session_state.get('translated_lang')}.txt",
-                mime="text/plain"
-            )
-        else:
-            st.error("Translation failed or the content is too short. Cannot download.")
+        
+        # Ensure content is valid before allowing download
+        is_content_valid = st.session_state.translated_text and "error" not in st.session_state.translated_text.lower() and len(st.session_state.translated_text) > 20
+        
+        st.download_button(
+            label="📥 Download Translation",
+            data=st.session_state.translated_text.encode('utf-8') if is_content_valid else b"",
+            file_name=f"translation_{st.session_state.get('translated_lang', 'unknown')}.txt",
+            mime="text/plain",
+            disabled=not is_content_valid
+        )
+        
+        if not is_content_valid:
+            st.error("Translation failed or content is too short to download.")
 
 def main():
     apply_styling()
