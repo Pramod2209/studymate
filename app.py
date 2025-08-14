@@ -206,44 +206,11 @@ def apply_styling():
     }
     
     .floating-elements {
-        position: absolute;
-        width: 100%;
-        height: 100%;
-        top: 0;
-        left: 0;
-        pointer-events: none;
-        overflow: hidden;
+        display: none;
     }
     
     .floating-circle {
-        position: absolute;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.1);
-        animation: float 6s ease-in-out infinite;
-    }
-    
-    .floating-circle:nth-child(1) {
-        width: 80px;
-        height: 80px;
-        top: 10%;
-        left: 10%;
-        animation-delay: 0s;
-    }
-    
-    .floating-circle:nth-child(2) {
-        width: 60px;
-        height: 60px;
-        top: 20%;
-        right: 15%;
-        animation-delay: 2s;
-    }
-    
-    .floating-circle:nth-child(3) {
-        width: 40px;
-        height: 40px;
-        bottom: 20%;
-        left: 20%;
-        animation-delay: 4s;
+        display: none;
     }
     
     @keyframes float {
@@ -423,44 +390,11 @@ def show_action_menu():
     }
     
     .floating-elements {
-        position: absolute;
-        width: 100%;
-        height: 100%;
-        top: 0;
-        left: 0;
-        pointer-events: none;
-        overflow: hidden;
+        display: none;
     }
     
     .floating-circle {
-        position: absolute;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.1);
-        animation: float 6s ease-in-out infinite;
-    }
-    
-    .floating-circle:nth-child(1) {
-        width: 80px;
-        height: 80px;
-        top: 10%;
-        left: 10%;
-        animation-delay: 0s;
-    }
-    
-    .floating-circle:nth-child(2) {
-        width: 60px;
-        height: 60px;
-        top: 20%;
-        right: 15%;
-        animation-delay: 2s;
-    }
-    
-    .floating-circle:nth-child(3) {
-        width: 40px;
-        height: 40px;
-        bottom: 20%;
-        left: 20%;
-        animation-delay: 4s;
+        display: none;
     }
     
     @keyframes float {
@@ -494,15 +428,6 @@ def show_action_menu():
     
     # Main premium container
     st.markdown('<div class="premium-container">', unsafe_allow_html=True)
-    
-    # Floating background elements
-    st.markdown("""
-    <div class="floating-elements">
-        <div class="floating-circle"></div>
-        <div class="floating-circle"></div>
-        <div class="floating-circle"></div>
-    </div>
-    """, unsafe_allow_html=True)
     
     # Hero section
     st.markdown("""
@@ -887,7 +812,7 @@ def handle_pdf_upload():
 
 def handle_summarization():
     st.markdown("## 📄 Document Summarization")
-    st.markdown("Generate intelligent summaries of your uploaded document")
+    st.markdown("Get concise, intelligent summaries of your uploaded document")
     
     # Back button
     if st.button("← Back to Actions", key="back_summary"):
@@ -898,56 +823,37 @@ def handle_summarization():
         st.warning("⚠️ Please upload a PDF first!")
         return
     
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     
     with col1:
-        summary_length = st.select_slider(
-            "Summary Length",
-            options=["Brief", "Medium", "Detailed"],
-            value="Medium",
-            key="summary_length"
-        )
-    
+        if st.button("📝 Brief Summary", use_container_width=True):
+            st.session_state.summary_type = "Brief"
+
     with col2:
-        summary_style = st.selectbox(
-            "Summary Style",
-            ["Academic", "Simple", "Bullet Points"],
-            key="summary_style"
-        )
-    
-    if st.button("🚀 Generate Summary", use_container_width=True):
-        with st.spinner("🤖 AI is analyzing your document..."):
-            show_loading_animation("Generating summary")
-            
-            try:
-                summary = ai_services.summarize_content(
-                    st.session_state.pdf_content,
-                    length=summary_length,
-                    style=summary_style
-                )
-                
-                # Animated result display
-                st.markdown("### ✨ Summary Generated!")
-                
-                with st.container():
-                    st.markdown("""
-                    <div class="result-card">
-                    """, unsafe_allow_html=True)
-                    
-                    st.markdown(summary)
-                    
-                    st.markdown("</div>", unsafe_allow_html=True)
-                
-                # Download option
-                st.download_button(
-                    label="📥 Download Summary",
-                    data=summary,
-                    file_name=f"summary_{st.session_state.pdf_filename}.txt",
-                    mime="text/plain"
-                )
-                
-            except Exception as e:
-                st.error(f"❌ Error generating summary: {str(e)}")
+        if st.button("📚 Detailed Summary", use_container_width=True):
+            st.session_state.summary_type = "Detailed"
+
+    with col3:
+        if st.button("🎯 Key Points", use_container_width=True):
+            st.session_state.summary_type = "Key Points"
+
+    # If a summary type is selected, generate the summary
+    if st.session_state.get("summary_type"):
+        if st.session_state.get("current_summary_type") != st.session_state.summary_type:
+            with st.spinner(f"Generating {st.session_state.summary_type.lower()} summary..."):
+                ai = AIServices()
+                full_text = st.session_state.get("pdf_content", "")
+                if st.session_state.summary_type == "Key Points":
+                    summary = ai.extract_key_points(full_text)
+                else:
+                    summary = ai.summarize_content(full_text, st.session_state.summary_type, "Academic")
+                st.session_state.summary = summary
+                st.session_state.current_summary_type = st.session_state.summary_type
+            st.rerun()
+
+    if "summary" in st.session_state:
+        st.markdown("#### Summary Result:")
+        st.text_area("", st.session_state.summary, height=300)
 
 def handle_topic_extraction():
     st.markdown("## 🏷️ Key Topic Extraction")
